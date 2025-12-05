@@ -85,7 +85,7 @@ export default function HeroScroll({
   logoVideoSrc = asset("logo.mp4"),
   logoWebmAlphaSrc = asset("logo.webm"),
   logoOpacity = 1,
-  logoOffsetYPct = -8,
+  logoOffsetYPct = 0,
   bgOpacity = 0.3,
   heroBgOpacity = bgOpacity,
   showVignette = false,
