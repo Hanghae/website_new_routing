@@ -279,7 +279,7 @@ export default function HeroScroll({
               style={{ y: reduced ? 0 : pY, opacity: reduced ? 1 : pOpacity }}
               className="mt-6 max-w-3xl text-pretty text-[1.4rem] leading-relaxed text-neutral-200"
             >
-              Text‑only hero. No distractions. Scroll to reveal the work philosophy and jump straight to selected projects.
+              디지털과 현실 사이의 틈을 열어, 플레이할 수 있는 현실을 만듭니다.
             </motion.p>
           </div>
         </div>
