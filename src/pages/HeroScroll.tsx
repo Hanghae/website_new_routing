@@ -1,4 +1,5 @@
 /// <reference types="vitest" />
+import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
@@ -360,10 +361,9 @@ export default function HeroScroll({
           >
             {filteredWorks.map((w) => (
               <motion.li key={w.id} layout className="group overflow-hidden rounded-lg border border-white/10 bg-white/5">
-                <a
-                  href={`#works`}
+                <Link
+                  to={`/work/${encodeURIComponent(w.slug)}`}
                   className="block"
-                  role="link"
                   aria-label={`Open ${w.title}`}
                 >
 
@@ -378,7 +378,7 @@ export default function HeroScroll({
                     <span className="truncate text-white/90">{w.title}</span>
                     <span className="truncate text-white/40">{w.tags[0]}</span>
                   </div>
-                </a>
+                </Link>
               </motion.li>
             ))}
           </motion.ul>
