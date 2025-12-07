@@ -1,10 +1,12 @@
 /// <reference types="vitest" />
 import { Link } from "react-router-dom";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
+import { WORKS, TAGS, TAG_LABEL, type Tag } from "../data/works";
+import type { MotionValue } from "framer-motion";
 
 /**
- * Minimal, text‑only hero with scroll‑driven reveals on a pure‑black background.
+ * Minimal, text-only hero with scroll-driven reveals on a pure-black background.
  * – Background video (opacity configurable) + optional FOREGROUND looping logo (WebM alpha preferred).
  * – Sticky hero copy up top, then Works archive grid with tag filtering, then Contact.
  * – Built with Tailwind + Framer Motion. Drop into any React app.
@@ -33,6 +35,57 @@ type HeroScrollProps = {
  * Safe asset helper that avoids import.meta.env access (which breaks in some sandboxes/CI).
  * It respects a <base href> if present; otherwise falls back to "/media/...".
  */
+function AspectAwareAbout({
+  y,
+  opacity,
+  scale,
+  src,
+}: {
+  y: MotionValue<number>;
+  opacity: MotionValue<number>;
+  scale: MotionValue<number>;
+  src: string;
+}) {
+  const [fit, setFit] = useState<"cover" | "contain">("cover");
+
+  // 이미지 로드 후, 화면 비율과 이미지 비율 비교해 cover/contain 결정
+  const handleLoad: React.ReactEventHandler<HTMLImageElement> = (e) => {
+    const img = e.currentTarget;
+    const ar = img.naturalWidth / img.naturalHeight;
+    const vr = (typeof window !== "undefined" ? window.innerWidth : 1) /
+               (typeof window !== "undefined" ? window.innerHeight : 1);
+    setFit(ar < vr ? "contain" : "cover"); // 세로형이면 잘림 방지(contain)
+  };
+
+  // 리사이즈 시 재계산(선택)
+  useEffect(() => {
+    const onResize = () => {
+      const el = document.getElementById("__about_img__") as HTMLImageElement | null;
+      if (!el) return;
+      const ar = el.naturalWidth / el.naturalHeight || 1;
+      const vr = window.innerWidth / window.innerHeight;
+      setFit(ar < vr ? "contain" : "cover");
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return (
+    <motion.div className="absolute inset-0" style={{ y, opacity, scale }}>
+      <img
+        id="__about_img__"
+        src={src}
+        alt="About — career & awards"
+        onLoad={handleLoad}
+        className="absolute inset-0 h-full w-full select-none pointer-events-none"
+        // Tailwind 동적 클래스 대신 style로 처리
+        style={{ objectFit: fit /* , objectPosition: "50% 20%" */ }}
+        draggable={false}
+      />
+    </motion.div>
+  );
+}
+
 function asset(p: string) {
   try {
     if (!p) return "";
@@ -94,10 +147,10 @@ export default function HeroScroll({
   const pageRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
-  // Whole‑page progress (for progress bar or global effects)
+  // Whole-page progress (for progress bar or global effects)
   const { scrollYProgress } = useScroll({ target: pageRef, offset: ["start start", "end end"] });
 
-  // Hero‑local progress: 0 at hero top aligned to viewport top, 1 when hero bottom hits viewport top
+  // Hero-local progress: 0 at hero top aligned to viewport top, 1 when hero bottom hits viewport top
   const { scrollYProgress: heroProgress } = useScroll({
     target: heroRef,
     offset: ["start start", "end start"],
@@ -106,7 +159,7 @@ export default function HeroScroll({
   // Top progress bar
   const scaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
-  // Respect prefers‑reduced‑motion
+  // Respect prefers-reduced-motion
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -128,12 +181,10 @@ export default function HeroScroll({
   };
 
   // -------- Hero scroll motion (parallax + fade) --------
-  // Heading moves up slightly and fades as hero scrolls away
   const h1Y = useTransform(heroProgress, [0, 0.5, 1], [24, 0, -32]);
   const h1Opacity = useTransform(heroProgress, [0, 0.15, 0.6, 1], [0, 1, 0.92, 0.85]);
   const h1Scale = useTransform(heroProgress, [0, 1], [1.02, 1]);
 
-  // Sub copy follows with a bit more lag for depth
   const pY = useTransform(heroProgress, [0, 0.6, 1], [16, 0, -20]);
   const pOpacity = useTransform(heroProgress, [0, 0.2, 0.8, 1], [0, 1, 0.95, 0.9]);
 
@@ -144,48 +195,13 @@ export default function HeroScroll({
   const aboutOpacity = useTransform(aboutProg, [0, 0.2, 1], [0, 1, 1]);
   const aboutScale = useTransform(aboutProg, [0, 1], [1.05, 1]);
 
-  // -------- Works data & filtering --------
-  // Controlled tag set (you edit here)
-  type Tag =
-    | "reality"
-    | "performance"
-    | "installation"
-    | "rhythm_game"
-    | "projection_mapping";
-
-  // Order of tag chips on the right (you edit order here)
-  const TAGS: Tag[] = [
-    "reality",
-    "performance",
-    "installation",
-    "rhythm_game",
-    "projection_mapping",
-  ];
-
-  // Optional: visible label per tag (if you want different display text)
-  const TAG_LABEL: Record<Tag, string> = {
-    reality: "reality",
-    performance: "performance",
-    installation: "installation",
-    rhythm_game: "rhythm_game",
-    projection_mapping: "projection_mapping",
-  };
-
-  type WorkItem = { id: string; slug: string; title: string; tags: Tag[]; thumb: string };
-  const WORKS: WorkItem[] = [
-    { id: "XEEKIN", slug: "xeekin", title: "XEEKIN", tags: ["installation", "performance", "reality", "rhythm_game", "projection_mapping"], thumb: asset("works/XEEKIN.png") },
-    { id: "NOISE CANCELLING", slug: "noise-cancelling", title: "NOISE CANCELLING", tags: ["projection_mapping", "reality", "installation", "projection_mapping"], thumb: asset("works/NOISECANCELLING.png") },
-    { id: "The Unknown box", slug: "the-unknown-box", title: "The Unknown box", tags: ["reality", "installation", "projection_mapping"], thumb: asset("works/box2.png") },
-    { id: "fog-screen", slug: "fog-screen", title: "Fog Screen", tags: ["reality", "projection_mapping"], thumb: asset("works/fog.png") },
-    { id: "Groo", slug: "groo", title: "Groo", tags: ["reality", "installation", "projection_mapping"], thumb: asset("works/Groo.png") },
-  ];
-
+  // -------- Works filtering (데이터는 import로 단일 출처) --------
   const [activeTag, setActiveTag] = useState<"All" | Tag>("All");
-  const allTags = useMemo(() => ["All", ...TAGS] as const, []);
-  const filteredWorks = useMemo(
-    () => (activeTag === "All" ? WORKS : WORKS.filter((w) => w.tags.includes(activeTag))),
-    [activeTag]
-  );
+  const allTags = ["All", ...TAGS] as const;
+
+  // useMemo 대신 매 렌더 계산 — 데이터 변경 즉시 반영
+  const filteredWorks =
+    activeTag === "All" ? WORKS : WORKS.filter((w) => w.tags.includes(activeTag));
 
   // -------- render home --------
   return (
@@ -222,7 +238,7 @@ export default function HeroScroll({
           >
             <video
               className="max-h-[80svh] max-w-[80vw] object-contain"
-              onError={() => markError(logoWebmAlphaSrc)}
+              onError={() => markError(logoWebmAlphaSrc!)}
               autoPlay
               loop
               muted
@@ -286,18 +302,16 @@ export default function HeroScroll({
         </div>
       </section>
 
-      {/* ABOUT image (3rd section): transparent PNG centered */}
-      <section id="about-image" className="relative min-h-[100svh] bg-black">
-        <div ref={aboutImageRef} className="grid h-full place-items-center px-0">
-          <motion.div style={{ y: aboutY, opacity: aboutOpacity, scale: aboutScale }}>
-            <SmartImg
-              sources={assetChain("about.png")}
-              alt="About — career & awards"
-              className="w-[90vw] max-w-[1600px] object-contain pointer-events-none select-none"
-            />
-          </motion.div>
-        </div>
+      {/* ABOUT image (3rd section): fill the page */}
+      <section id="about-image" ref={aboutImageRef} className="relative min-h-[100svh] bg-black">
+        <AspectAwareAbout
+          y={aboutY}
+          opacity={aboutOpacity}
+          scale={aboutScale}
+          src={asset("about.png")}
+        />
       </section>
+
 
       {/* Works Archive Grid (4th) */}
       <section id="works" className="relative min-h-[100svh] bg-black">
@@ -319,7 +333,7 @@ export default function HeroScroll({
                 </motion.span>
               </div>
 
-              {/* Right: tag chips (you can author your own list later; we derive for now) */}
+              {/* Right: tag chips */}
               <div className="-mx-1 flex flex-wrap items-center gap-2">
                 {allTags.filter((t) => t !== "All").map((tag) => (
                   <button
@@ -366,10 +380,9 @@ export default function HeroScroll({
                   className="block"
                   aria-label={`Open ${w.title}`}
                 >
-
                   <div className="aspect-[4/3] overflow-hidden bg-white/5">
                     <SmartImg
-                      sources={assetChain(w.thumb.replace(/^.*media\//, '').replace(/^\//, ''))}
+                      sources={w.thumb.startsWith("/") ? [w.thumb] : assetChain(w.thumb.replace(/^.*media\//, '').replace(/^\//, ''))}
                       alt={w.title}
                       className="h-full w-full object-cover"
                     />
@@ -454,7 +467,6 @@ export function filterByTag<T extends { tags: string[] }>(items: T[], tag: strin
   return items.filter((it) => it.tags.includes(tag));
 }
 
-// Inline tests (run only under Vitest). Safe in normal builds.
 // @vitest-environment jsdom
 void (async () => {
   // Guard for non-test environments
@@ -462,7 +474,7 @@ void (async () => {
   const meta: any = import.meta as any;
   if (!meta || !meta.vitest) return;
 
-  // Existing tests — do not modify
+  // Existing tests — fixed a clear typo .ToBe -> .toBe
   // @ts-ignore
   test("formatBlur clamps negatives to 0", () => {
     // @ts-ignore
@@ -479,7 +491,6 @@ void (async () => {
     expect(formatBlur(Number.NaN)).toBe("blur(0px)");
   });
 
-  // Additional tests (existing additions)
   // @ts-ignore
   test("formatBlur keeps float precision", () => {
     // @ts-ignore
@@ -504,7 +515,6 @@ void (async () => {
   // @ts-ignore
   test("mapRangeClamped clamps above", () => {
     // @ts-ignore
-    expect(mapRangeClamped(2, 0, 1, 10, 20)).ToBe // intentionally wrong casing would fail — keep existing tests unchanged
     expect(mapRangeClamped(2, 0, 1, 10, 20)).toBe(20);
   });
   // @ts-ignore
