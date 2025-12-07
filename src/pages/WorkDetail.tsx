@@ -18,6 +18,9 @@ export default function WorkDetail() {
     );
   }
 
+  // youtubeId가 공란("")이어도 임베드하지 않도록 안전 체크
+  const hasYouTube = typeof work.youtubeId === "string" && work.youtubeId.trim().length > 0;
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 space-y-10 bg-black text-white">
       {/* 상단 컨트롤 */}
@@ -36,37 +39,33 @@ export default function WorkDetail() {
       {/* 타이틀 */}
       <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{work.title}</h1>
 
-      {/* ★ 상단 이미지(썸네일) — Noise Cancelling에서는 숨김 */}
-      {work.slug !== "noise-cancelling" && (
-        <div className="aspect-[16/9] overflow-hidden rounded-lg border border-white/10 bg-white/5">
-          <img
-            src={work.thumb}
-            alt={work.title}
-            className="h-full w-full object-contain"
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
-      )}
+      {/* ★ 상단은 반드시 YouTube 임베드 (없으면 안내) */}
+      <section aria-labelledby="video-heading" className="space-y-3">
+        <h2 id="video-heading" className="text-xl font-semibold">Video</h2>
 
-      {/* YouTube 섹션: youtubeId가 있을 때만 표시 */}
-      {work.youtubeId && (
-        <section aria-labelledby="video-heading" className="space-y-3">
-          <h2 id="video-heading" className="text-xl font-semibold">Video</h2>
-          <div className="aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
+        <div className="aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
+          {hasYouTube ? (
             <iframe
               loading="lazy"
               className="h-full w-full"
-              src={`https://www.youtube-nocookie.com/embed/${work.youtubeId}?rel=0&modestbranding=1&playsinline=1`}
+              src={`https://www.youtube-nocookie.com/embed/${work.youtubeId!.trim()}?rel=0&modestbranding=1&playsinline=1`}
               title={`${work.title} — YouTube player`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
             />
-          </div>
-          <p className="text-sm text-white/60">YouTube (privacy-enhanced) embed.</p>
-        </section>
-      )}
+          ) : (
+            <div className="grid h-full place-items-center p-4 text-sm text-white/70">
+              <p>
+                This work has no <code className="text-white/90">youtubeId</code> yet.
+                Add it in <code className="text-white/90">src/data/works.ts</code> to show a video.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-sm text-white/60">YouTube (privacy-enhanced) embed.</p>
+      </section>
 
       {/* 태그 */}
       <div className="flex flex-wrap gap-2">
@@ -80,7 +79,7 @@ export default function WorkDetail() {
         ))}
       </div>
 
-      {/* 설명 섹션(원하면 자유롭게 확장) */}
+      {/* 설명 섹션 */}
       <section className="prose prose-invert max-w-3xl">
         <h2 className="text-xl font-semibold">About this work</h2>
         <p className="text-white/80">
