@@ -52,7 +52,7 @@ export const WORKS: WorkItem[] = [
     slug: "xeekin",
     title: "XEEKIN",
     tags: ["installation", "performance", "reality", "rhythm_game", "projection_mapping"],
-    thumb: "/works/NOISECANCELLING.png",
+    thumb: "/works/XEEKIN.png",
     youtubeId: "LNq-itphuMw", // ← 실제 11자리 ID인지 확인 권장
   },
   {
@@ -176,6 +176,7 @@ export const WORKS: WorkItem[] = [
     youtubeId: "8jTFZBbRUGo",
   },
 ];
+
 
 
 
