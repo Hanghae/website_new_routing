@@ -402,15 +402,41 @@ export default function HeroScroll({
         </div>
       </section>
 
-      {/* Contact (5th) */}
-      <footer id="contact" className="mx-auto max-w-6xl px-6 pb-16 pt-10 text-sm text-neutral-500 sm:px-10">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <p>© {new Date().getFullYear()} Hwang Su Jong</p>
-          <a className="rounded underline-offset-4 hover:text-neutral-300 hover:underline focus:outline-none focus:ring-2 focus:ring-white/30" href="mailto:su96hwang@gmail.com">
-            Contact
-          </a>
-        </div>
-      </footer>
+      {/* Contact (5th) — 폼 + 메일to 백업 */}
+        <section
+          id="contact"
+          className="relative bg-black"
+          aria-labelledby="contact-heading"
+        >
+          <div className="mx-auto max-w-6xl px-6 sm:px-10 py-14 sm:py-16">
+            <h2
+              id="contact-heading"
+              className="text-2xl sm:text-3xl font-bold tracking-tight"
+            >
+              Contact
+            </h2>
+            <p className="mt-2 text-neutral-300 max-w-2xl">
+              제출 즉시 메일 초안이 열리며, 필요 시 내용을 수정한 뒤 전송하시면 됩니다.
+            </p>
+
+            {/* 폼: 기본은 메일to, 필요하면 Formspree/EmailJS로 바꾸기 쉬움 */}
+            <ContactForm />
+          </div>
+
+          {/* 작은 푸터 */}
+          <div className="border-t border-white/10">
+            <div className="mx-auto max-w-6xl px-6 sm:px-10 py-8 text-sm text-neutral-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <p>© {new Date().getFullYear()} Hwang Su Jong</p>
+              <a
+                className="rounded underline-offset-4 hover:text-neutral-300 hover:underline focus:outline-none focus:ring-2 focus:ring-white/30"
+                href="mailto:hsail5483@gmail.com"
+              >
+                hsail5483@gmail.com
+              </a>
+            </div>
+          </div>
+        </section>
+
 
       {/* Debug panel */}
       {debug && assetErrors.length > 0 && (
@@ -466,6 +492,104 @@ export function filterByTag<T extends { tags: string[] }>(items: T[], tag: strin
   if (!tag || tag === 'All') return items;
   return items.filter((it) => it.tags.includes(tag));
 }
+
+function ContactForm() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  // 스팸 방지용 허니팟
+  const [website, setWebsite] = useState("");
+
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+    e.preventDefault();
+    if (website) return; // 봇 의심시 무시
+
+    const subject = encodeURIComponent(`[Inquiry] ${name || "New project"}`);
+    const body = encodeURIComponent(
+      [
+        `Name: ${name}`,
+        `Email: ${email}`,
+        ``,
+        `Message:`,
+        message,
+      ].join("\n")
+    );
+
+    window.location.href = `mailto:su96hwang@gmail.com?subject=${subject}&body=${body}`;
+  };
+
+  const inputCls =
+    "w-full rounded-xl bg-black/40 border border-white/15 px-4 py-2.5 outline-none focus:ring-2 focus:ring-white/30 text-white placeholder:text-white/40";
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="mt-6 grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-white/5 p-5"
+      aria-labelledby="contact-form"
+    >
+      <h3 id="contact-form" className="sr-only">Contact form</h3>
+
+      {/* 허니팟(숨김) */}
+      <label className="hidden">
+        Website
+        <input
+          tabIndex={-1}
+          autoComplete="off"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+        />
+      </label>
+
+      <label>
+        <div className="mb-1 text-xs text-white/60">Name</div>
+        <input
+          className={inputCls}
+          placeholder="Your name"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+
+      <label>
+        <div className="mb-1 text-xs text-white/60">Email</div>
+        <input
+          type="email"
+          className={inputCls}
+          placeholder="you@domain.com"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </label>
+
+      <label>
+        <div className="mb-1 text-xs text-white/60">Message</div>
+        <textarea
+          className={inputCls + " min-h-[140px]"}
+          placeholder="Project summary, goals, references…"
+          required
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
+      </label>
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs text-white/60">
+          제출 시 메일 클라이언트가 열립니다. (정보는 답변 목적에만 사용)
+        </p>
+        <button
+          className="rounded-xl bg-white text-black hover:bg-white/90 px-4 py-2.5 font-medium"
+          type="submit"
+        >
+          Send
+        </button>
+      </div>
+    </form>
+  );
+}
+
+
 
 // @vitest-environment jsdom
 void (async () => {
