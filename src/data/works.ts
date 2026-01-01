@@ -55,7 +55,7 @@ export const WORKS: WorkItem[] = [
     slug: "xeekin",
     title: "XEEKIN",
     tags: ["installation", "performance", "reality", "rhythm_game", "projection_mapping"],
-    thumb: "/works/XEEKIN.jpg",
+    thumb: "/works/XEEKIN.png",
     preview: "/works/previews/xeekin.webm",
     subtitle: "Anyone can be a performer",
     youtubeId: "LNq-itphuMw",
@@ -201,3 +201,4 @@ export const WORKS: WorkItem[] = [
     youtubeId: "8jTFZBbRUGo",
   },
 ];
+
