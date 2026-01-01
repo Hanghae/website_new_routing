@@ -33,17 +33,15 @@ export const TAG_LABEL: Record<Tag, string> = {
 
 export type WorkItem = {
   id: string;
-  slug: string;     // /work/:slug
+  slug: string;
   title: string;
-  tags: Tag[];
-  /** 홈 그리드 썸네일 — (root)/public/works/<파일> → "/works/<파일>" 로 적기 */
   thumb: string;
-  /** 호버 시 재생할 프리뷰 (gif/webm/mp4). 없으면 정지 썸네일만 */
-  preview?: string;
-  /** 썸네일 오버레이에 뜨는 서브 텍스트(없으면 첫 태그 사용) */
-  subtitle?: string;
-  /** YouTube watch?v=ID 의 그 ID (없어도 됨) */
+  tags: string[];
   youtubeId?: string;
+
+  // ✨ Hover 오버레이에서 사용 중
+  preview?: string;
+  subtitle?: string;
 };
 
 /**
