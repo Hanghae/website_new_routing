@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-// 줄바꿈 한 줄 == <br/> 원하면 유지, 아니면 이 줄과 plugins에서 제거
 import remarkBreaks from "remark-breaks";
 import { useI18n } from "../i18n";
 
@@ -13,6 +12,7 @@ type Props = {
 
 /**
  * /public/content/<slug>.(ko|en).md → <slug>.md 순으로 시도
+ * - public 폴더 기준 경로: /content/<file>.md
  */
 export default function WorkBody({ className }: Props) {
   const { slug } = useParams();
@@ -42,7 +42,7 @@ export default function WorkBody({ className }: Props) {
           const text = await res.text();
           if (abort) return;
           if (text.trim().length === 0) continue;
-          setMd(text);        // ✨ 원본 그대로 — 하드브레이크/공백 보존
+          setMd(text);        // 원본 그대로 — 하드브레이크/공백 보존
           setState("ok");
           return;
         } catch {
@@ -56,13 +56,18 @@ export default function WorkBody({ className }: Props) {
   }, [candidates, slug]);
 
   if (state === "loading") return <p className="text-white/60">Loading content…</p>;
-  if (state === "empty")   return <p className="text-white/80">본문 파일이 없습니다. <code className="text-white/95">/public/content/{slug}.(ko|en).md</code> 를 만들어 주세요.</p>;
-  if (state === "error")   return <p className="text-red-400">Failed to load content.</p>;
-  if (!md)                 return null;
+  if (state === "empty")
+    return (
+      <p className="text-white/80">
+        본문 파일이 없습니다.{" "}
+        <code className="text-white/95">/public/content/{slug}.(ko|en).md</code> 를 만들어 주세요.
+      </p>
+    );
+  if (state === "error") return <p className="text-red-400">Failed to load content.</p>;
+  if (!md) return null;
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
+    <div
       className={
         "prose prose-invert max-w-none " +
         "prose-headings:scroll-mt-20 " +
@@ -71,11 +76,16 @@ export default function WorkBody({ className }: Props) {
         "prose-li:marker:text-white/50 " +
         (className ?? "")
       }
-      components={{
-        h1: ({node, ...props}) => <h1 className="!mt-0" {...props} />,
-      }}
     >
-      {md}
-    </ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{
+          // 타입 충돌 방지: props만 받아서 그대로 전달
+          h1: (props) => <h1 className="!mt-0" {...props} />,
+        }}
+      >
+        {md}
+      </ReactMarkdown>
+    </div>
   );
 }
