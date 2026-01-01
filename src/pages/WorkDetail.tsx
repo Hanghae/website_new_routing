@@ -1,8 +1,18 @@
 // src/pages/WorkDetail.tsx
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks"; // ⬅️ 줄바꿈 보존
+
 import { WORKS } from "../data/works";
+import { useI18n } from "../i18n";
+
+// MD 파일 묶어 불러오기 (slug.md)
+const RAW_MD = import.meta.glob("../content/works/*.md", { as: "raw" });
 
 export default function WorkDetail() {
+  const { t } = useI18n();
   const { slug } = useParams();
   const nav = useNavigate();
   const work = WORKS.find((w) => w.slug === slug);
@@ -18,11 +28,34 @@ export default function WorkDetail() {
     );
   }
 
-  // youtubeId가 공란("")이어도 임베드하지 않도록 안전 체크
-  const hasYouTube = typeof work.youtubeId === "string" && work.youtubeId.trim().length > 0;
+  const hasYouTube =
+    typeof work.youtubeId === "string" && work.youtubeId.trim().length > 0;
+
+  // MD 본문 상태
+  const [mdBody, setMdBody] = useState<string | null>(null);
+
+  // slug에 맞는 md 파일 로드
+  useEffect(() => {
+    let alive = true;
+    // 파일명: /src/content/works/{slug}.md
+    const key = Object.keys(RAW_MD).find((k) => k.endsWith(`/${work.slug}.md`));
+    if (!key) {
+      setMdBody(null);
+      return;
+    }
+    (async () => {
+      const raw = await RAW_MD[key](); // 문자열 원본
+      if (!alive) return;
+      // ✨ trim 제거: 마크다운 하드 브레이크(두 칸 공백 + 개행) 보존
+      setMdBody(raw);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [work.slug]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 space-y-10 bg-black text-white">
+    <main className="mx-auto max-w-6xl bg-black text-white px-4 sm:px-6 lg:px-10 py-10 space-y-10">
       {/* 상단 컨트롤 */}
       <div className="flex items-center justify-between">
         <button
@@ -36,14 +69,33 @@ export default function WorkDetail() {
         </Link>
       </div>
 
-      {/* 타이틀 */}
-      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{work.title}</h1>
+      {/* 제목 + 태그 */}
+      <header className="border-b border-white/10 pb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            {work.title}
+          </h1>
 
-      {/* ★ 상단은 반드시 YouTube 임베드 (없으면 안내) */}
+          <div className="-mx-1 flex flex-wrap items-center gap-2">
+            {work.tags.map((tag) => (
+              <span
+                key={tag}
+                className="px-3 py-1.5 text-xs sm:text-sm rounded-full border border-white/20 text-white/85"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Video */}
       <section aria-labelledby="video-heading" className="space-y-3">
-        <h2 id="video-heading" className="text-xl font-semibold">Video</h2>
+        <h2 id="video-heading" className="text-base font-semibold text-white/80">
+          {t("work_video")}
+        </h2>
 
-        <div className="aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
+        <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
           {hasYouTube ? (
             <iframe
               loading="lazy"
@@ -57,35 +109,63 @@ export default function WorkDetail() {
           ) : (
             <div className="grid h-full place-items-center p-4 text-sm text-white/70">
               <p>
-                This work has no <code className="text-white/90">youtubeId</code> yet.
-                Add it in <code className="text-white/90">src/data/works.ts</code> to show a video.
+                {t("work_no_youtube_1")}
+                <code className="text-white/90">{t("work_youtubeId")}</code>
+                {t("work_no_youtube_2")} {t("work_add_in_file_1")}
+                <code className="text-white/90">src/data/works.ts</code>
+                {t("work_add_in_file_2")}
               </p>
             </div>
           )}
         </div>
 
-        <p className="text-sm text-white/60">YouTube (privacy-enhanced) embed.</p>
+        <p className="text-xs sm:text-sm text-white/50">
+          YouTube (privacy-enhanced) embed.
+        </p>
       </section>
 
-      {/* 태그 */}
-      <div className="flex flex-wrap gap-2">
-        {work.tags.map((t) => (
-          <span
-            key={t}
-            className="rounded-full border border-white/20 px-2 py-0.5 text-xs uppercase tracking-wide text-white/80"
-          >
-            {t}
-          </span>
-        ))}
-      </div>
+      {/* 본문(캡션) */}
+      <section
+        aria-labelledby="desc-heading"
+        className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8"
+      >
+        <h2 id="desc-heading" className="sr-only">
+          Description
+        </h2>
 
-      {/* 설명 섹션 */}
-      <section className="prose prose-invert max-w-3xl">
-        <h2 className="text-xl font-semibold">About this work</h2>
-        <p className="text-white/80">
-          작품 설명 / 역할 / 사용 툴 / 제작 연도 / 외부 링크 등을 여기에 작성하세요.
-          섹션을 더 나눠서 각 섹션마다 스크롤 모션을 추가할 수도 있습니다.
-        </p>
+        {mdBody ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkBreaks]} // ✨ 줄바꿈 처리
+            className="prose prose-invert max-w-none
+                       prose-headings:scroll-mt-20
+                       prose-p:text-white/90
+                       prose-strong:text-white
+                       prose-a:text-white hover:prose-a:opacity-80
+                       prose-li:marker:text-white/50"
+            components={{
+              h1: ({ node, ...props }) => <h1 className="!mt-0" {...props} />,
+            }}
+          >
+            {mdBody}
+          </ReactMarkdown>
+        ) : (
+          <article className="prose prose-invert max-w-none">
+            {work.slug === "xeekin" ? (
+              <>
+                <h3 className="!mt-0">{t("xeekin_h3")}</h3>
+                <p>{t("xeekin_p1")}</p>
+                <p>{t("xeekin_p2")}</p>
+              </>
+            ) : (
+              <>
+                <h3 className="!mt-0">{work.title}</h3>
+                <p className="text-white/80">
+                  
+                </p>
+              </>
+            )}
+          </article>
+        )}
       </section>
     </main>
   );
