@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks"; // ⬅️ 줄바꿈 보존
+import remarkBreaks from "remark-breaks"; // 줄바꿈 보존
 
 import { WORKS } from "../data/works";
 import { useI18n } from "../i18n";
@@ -46,7 +46,7 @@ export default function WorkDetail() {
     (async () => {
       const raw = await RAW_MD[key](); // 문자열 원본
       if (!alive) return;
-      // ✨ trim 제거: 마크다운 하드 브레이크(두 칸 공백 + 개행) 보존
+      // trim 제거: 마크다운 하드 브레이크 보존
       setMdBody(raw);
     })();
     return () => {
@@ -134,20 +134,24 @@ export default function WorkDetail() {
         </h2>
 
         {mdBody ? (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkBreaks]} // ✨ 줄바꿈 처리
-            className="prose prose-invert max-w-none
-                       prose-headings:scroll-mt-20
-                       prose-p:text-white/90
-                       prose-strong:text-white
-                       prose-a:text-white hover:prose-a:opacity-80
-                       prose-li:marker:text-white/50"
-            components={{
-              h1: ({ node, ...props }) => <h1 className="!mt-0" {...props} />,
-            }}
+          <div
+            className={
+              "prose prose-invert max-w-none " +
+              "prose-headings:scroll-mt-20 " +
+              "prose-p:text-white/90 prose-strong:text-white " +
+              "prose-a:text-white hover:prose-a:opacity-80 " +
+              "prose-li:marker:text-white/50 "
+            }
           >
-            {mdBody}
-          </ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkBreaks]} // 줄바꿈 처리
+              components={{
+                h1: (props) => <h1 className="!mt-0" {...props} />,
+              }}
+            >
+              {mdBody}
+            </ReactMarkdown>
+          </div>
         ) : (
           <article className="prose prose-invert max-w-none">
             {work.slug === "xeekin" ? (
@@ -160,7 +164,7 @@ export default function WorkDetail() {
               <>
                 <h3 className="!mt-0">{work.title}</h3>
                 <p className="text-white/80">
-                  
+                  작품 설명 / 역할 / 사용 툴 / 제작 연도 / 외부 링크 등을 여기에 작성하세요.
                 </p>
               </>
             )}
