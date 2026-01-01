@@ -3,86 +3,134 @@ import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { WORKS, TAGS, TAG_LABEL, type Tag } from "../data/works";
-import type { MotionValue } from "framer-motion";
+import { useI18n } from "../i18n";
 
-/**
- * Minimal, text-only hero with scroll-driven reveals on a pure-black background.
- * – Background video (opacity configurable) + optional FOREGROUND looping logo (WebM alpha preferred).
- * – Sticky hero copy up top, then Works archive grid with tag filtering, then Contact.
- * – Built with Tailwind + Framer Motion. Drop into any React app.
- */
+/** Utilities kept (asset, assetChain, mimeFrom, SmartImg) */
+function isVideoLike(url?: string) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return u.endsWith(".webm") || u.endsWith(".mp4");
+}
 
-type HeroScrollProps = {
-  /** Background video source */
-  heroVideoSrc?: string;
-  /** Legacy MP4 logo (kept for tests/back-compat, not rendered when WebM is provided) */
-  logoVideoSrc?: string;
-  /** WebM (VP9/AV1) with alpha for the logo overlay */
-  logoWebmAlphaSrc?: string;
-  /** Opacity for logo overlay video (0..1). Default 1 */
-  logoOpacity?: number;
-  /** Vertical offset for the logo overlay in percent (negative moves up). Default -8 */
-  logoOffsetYPct?: number;
-  /** Background video opacity (0..1). Default 0.3 */
-  bgOpacity?: number;
-  /** Background opacity for the HERO (2nd page) video (0..1). Defaults to bgOpacity */
-  heroBgOpacity?: number;
-  /** Show vignette overlay over background video */
-  showVignette?: boolean;
+type WorkCardProps = {
+  w: {
+    id: string;
+    slug: string;
+    title: string;
+    thumb: string;
+    tags: string[];
+    preview?: string;   // 선택
+    subtitle?: string;  // 선택
+  };
+  onError?: (url: string) => void;
 };
 
-/**
- * Safe asset helper that avoids import.meta.env access (which breaks in some sandboxes/CI).
- * It respects a <base href> if present; otherwise falls back to "/media/...".
- */
-function AspectAwareAbout({
-  y,
-  opacity,
-  scale,
-  src,
-}: {
-  y: MotionValue<number>;
-  opacity: MotionValue<number>;
-  scale: MotionValue<number>;
-  src: string;
-}) {
-  const [fit, setFit] = useState<"cover" | "contain">("cover");
+function WorkCard({ w, onError }: WorkCardProps) {
+  const [hovered, setHovered] = useState(false);
+  const hasPreview = Boolean(w.preview);
+  const previewIsVideo = isVideoLike(w.preview);
+  const overlayText = w.subtitle || w.tags?.[0] || "";
 
-  // 이미지 로드 후, 화면 비율과 이미지 비율 비교해 cover/contain 결정
-  const handleLoad: React.ReactEventHandler<HTMLImageElement> = (e) => {
-    const img = e.currentTarget;
-    const ar = img.naturalWidth / img.naturalHeight;
-    const vr = (typeof window !== "undefined" ? window.innerWidth : 1) /
-               (typeof window !== "undefined" ? window.innerHeight : 1);
-    setFit(ar < vr ? "contain" : "cover"); // 세로형이면 잘림 방지(contain)
-  };
-
-  // 리사이즈 시 재계산(선택)
-  useEffect(() => {
-    const onResize = () => {
-      const el = document.getElementById("__about_img__") as HTMLImageElement | null;
-      if (!el) return;
-      const ar = el.naturalWidth / el.naturalHeight || 1;
-      const vr = window.innerWidth / window.innerHeight;
-      setFit(ar < vr ? "contain" : "cover");
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  // 살짝 더 부드럽게: 호버 시만 로드/재생
+  const handleEnter = () => setHovered(true);
+  const handleLeave = () => setHovered(false);
 
   return (
-    <motion.div className="absolute inset-0" style={{ y, opacity, scale }}>
-      <img
-        id="__about_img__"
-        src={src}
-        alt="About — career & awards"
-        onLoad={handleLoad}
-        className="absolute inset-0 h-full w-full select-none pointer-events-none"
-        // Tailwind 동적 클래스 대신 style로 처리
-        style={{ objectFit: fit /* , objectPosition: "50% 20%" */ }}
-        draggable={false}
-      />
-    </motion.div>
+    <motion.li
+      layout
+      className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onTouchStart={handleEnter}
+      onTouchEnd={handleLeave}
+    >
+      <Link
+        to={`/work/${encodeURIComponent(w.slug)}`}
+        className="block"
+        aria-label={`Open ${w.title}`}
+      >
+        {/* 포스터(기본 썸네일) */}
+        <div className="aspect-[4/3] overflow-hidden bg-white/5">
+          <SmartImg
+            sources={
+              w.thumb.startsWith("/")
+                ? [w.thumb]
+                : assetChain(w.thumb.replace(/^.*media\//, "").replace(/^\//, ""))
+            }
+            alt={w.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+          />
+        </div>
+
+        {/* 호버 프리뷰: preview가 있을 때만 표시 */}
+        {hasPreview && (
+          <div
+            className={`
+              pointer-events-none absolute inset-0 opacity-0
+              transition-opacity duration-200
+              ${hovered ? "opacity-100" : ""}
+            `}
+            aria-hidden
+          >
+            {/* 재생 소스: video 우선, 아니면 gif/img */}
+            {previewIsVideo ? (
+              <video
+                className="h-full w-full object-cover"
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                autoPlay={hovered}
+                src={w.preview}
+                onError={() => onError?.(w.preview!)}
+              />
+            ) : (
+              <img
+                className="h-full w-full object-cover"
+                src={w.preview}
+                alt=""
+                loading="lazy"
+                onError={() => onError?.(w.preview!)}
+              />
+            )}
+
+           {/* 오버레이(그라데이션 + 텍스트) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 md:p-7">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  {/* 제목 크기 키움 */}
+                  <p className="truncate text-lg sm:text-xl md:text-2xl font-semibold text-white leading-tight">
+                    {w.title}
+                  </p>
+                  {/* 부제/태그 첫번째를 더 크게 + 아래 여백 확보 */}
+                  {overlayText && (
+                    <p className="truncate mt-1 text-sm sm:text-base md:text-lg text-white/85">
+                      {overlayText}
+                    </p>
+                  )}
+                  {/* 아래 여백 조금 더 주기 */}
+                  <div className="h-2 sm:h-3" />
+                </div>
+
+                {/* 우측 태그 배지도 살짝 키움 */}
+                {w.tags?.[0] && (
+                  <span className="shrink-0 rounded-full border border-white/30 px-2.5 py-1 text-[11px] sm:text-sm text-white/90">
+                    {w.tags[0]}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 카드 하단 라벨(기존 유지) — 필요 없으면 지워도 됨 */}
+        <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm">
+          <span className="truncate text-white/90">{w.title}</span>
+          <span className="truncate text-white/40">{w.tags[0]}</span>
+        </div>
+      </Link>
+    </motion.li>
   );
 }
 
@@ -98,17 +146,13 @@ function asset(p: string) {
   } catch {}
   return `/media/${p}`;
 }
-
-// Fallback chain: tries base-aware /media/p, then root /media/p, then root /p
 function assetChain(p: string): string[] {
   const a = asset(p);
   const chain = [a];
   if (!a.startsWith("/media/")) chain.push(`/media/${p}`);
   chain.push(`/${p}`);
-  // de-dup
   return Array.from(new Set(chain));
 }
-
 function mimeFrom(url: string): string | undefined {
   const u = url.toLowerCase();
   if (u.endsWith(".webm")) return "video/webm";
@@ -117,12 +161,10 @@ function mimeFrom(url: string): string | undefined {
   if (u.endsWith(".png")) return "image/png";
   return undefined;
 }
-
 function SmartImg({ sources, alt, className }: { sources: string[]; alt: string; className?: string }) {
   const [idx, setIdx] = useState(0);
   const src = sources[idx];
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={alt}
@@ -134,6 +176,17 @@ function SmartImg({ sources, alt, className }: { sources: string[]; alt: string;
   );
 }
 
+type HeroScrollProps = {
+  heroVideoSrc?: string;
+  logoVideoSrc?: string;
+  logoWebmAlphaSrc?: string;
+  logoOpacity?: number;
+  logoOffsetYPct?: number;
+  bgOpacity?: number;
+  heroBgOpacity?: number;
+  showVignette?: boolean;
+};
+
 export default function HeroScroll({
   heroVideoSrc = asset("hero.mp4"),
   logoVideoSrc = asset("logo.mp4"),
@@ -144,22 +197,27 @@ export default function HeroScroll({
   heroBgOpacity = bgOpacity,
   showVignette = false,
 }: HeroScrollProps) {
+  const { lang, setLang, t } = useI18n();
+
   const pageRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null); // 히어로 배경 모션
 
-  // Whole-page progress (for progress bar or global effects)
+  // 전체 페이지 진행도 (상단 progress bar)
   const { scrollYProgress } = useScroll({ target: pageRef, offset: ["start start", "end end"] });
+  const scaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
-  // Hero-local progress: 0 at hero top aligned to viewport top, 1 when hero bottom hits viewport top
+  // 히어로(두 번째 섹션) 스크롤 진행도
   const { scrollYProgress: heroProgress } = useScroll({
     target: heroRef,
     offset: ["start start", "end start"],
   });
+  const h1Y = useTransform(heroProgress, [0, 0.5, 1], [24, 0, -32]);
+  const h1Opacity = useTransform(heroProgress, [0, 0.15, 0.6, 1], [0, 1, 0.92, 0.85]);
+  const h1Scale = useTransform(heroProgress, [0, 1], [1.02, 1]);
+  const pY = useTransform(heroProgress, [0, 0.6, 1], [16, 0, -20]);
+  const pOpacity = useTransform(heroProgress, [0, 0.2, 0.8, 1], [0, 1, 0.95, 0.9]);
 
-  // Top progress bar
-  const scaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
-
-  // Respect prefers-reduced-motion
+  // 접근성: reduced motion
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -169,69 +227,88 @@ export default function HeroScroll({
     return () => mq.removeEventListener?.("change", handler);
   }, []);
 
-  // lightweight runtime diagnostics (enable with ?debug=1)
+  // 자가 진단 (?debug=1)
   const [assetErrors, setAssetErrors] = useState<string[]>([]);
   const markError = (url: string) => setAssetErrors((s) => (s.includes(url) ? s : [...s, url]));
-  const debug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+  const debug = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
 
-  // In-page smooth scroll helper for top-right nav
+  // 스크롤 이동 (Works/Contact만 사용)
   const scrollToId = (id: string) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  // -------- Hero scroll motion (parallax + fade) --------
-  const h1Y = useTransform(heroProgress, [0, 0.5, 1], [24, 0, -32]);
-  const h1Opacity = useTransform(heroProgress, [0, 0.15, 0.6, 1], [0, 1, 0.92, 0.85]);
-  const h1Scale = useTransform(heroProgress, [0, 1], [1.02, 1]);
-
-  const pY = useTransform(heroProgress, [0, 0.6, 1], [16, 0, -20]);
-  const pOpacity = useTransform(heroProgress, [0, 0.2, 0.8, 1], [0, 1, 0.95, 0.9]);
-
-  // -------- About image scroll motion --------
-  const aboutImageRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress: aboutProg } = useScroll({ target: aboutImageRef, offset: ["start 80%", "end 20%"] });
-  const aboutY = useTransform(aboutProg, [0, 1], [32, 0]);
-  const aboutOpacity = useTransform(aboutProg, [0, 0.2, 1], [0, 1, 1]);
-  const aboutScale = useTransform(aboutProg, [0, 1], [1.05, 1]);
-
-  // -------- Works filtering (데이터는 import로 단일 출처) --------
+  // 태그 필터
   const [activeTag, setActiveTag] = useState<"All" | Tag>("All");
   const allTags = ["All", ...TAGS] as const;
+  const filteredWorks = activeTag === "All" ? WORKS : WORKS.filter((w) => w.tags.includes(activeTag));
 
-  // useMemo 대신 매 렌더 계산 — 데이터 변경 즉시 반영
-  const filteredWorks =
-    activeTag === "All" ? WORKS : WORKS.filter((w) => w.tags.includes(activeTag));
-
-  // -------- render home --------
   return (
-    <div ref={pageRef} className="relative min-h-screen bg-black text-white selection:bg-white selection:text-black">
-      {/* Top progress bar (2px) */}
+    <div
+      ref={pageRef}
+      className="relative min-h-screen bg-black text-white selection:bg-white selection:text-black"
+      style={{ ["--nav-h" as any]: "56px" }} // ← 공통 높이 변수
+    >
+      {/* progress bar */}
       <motion.div className="fixed left-0 right-0 top-0 z-50 h-[2px] origin-left bg-white/70" style={{ scaleX }} />
 
-      {/* Translucent top bar with right-aligned nav */}
+      {/* top nav */}
       <nav className="fixed inset-x-0 top-0 z-40">
-        <div className="bg-white/5 backdrop-blur supports-[backdrop-filter]:bg-white/5">
-          <div className="flex items-center justify-end gap-8 text-base py-3 pr-4 sm:py-3.5 sm:pr-6">
-            <button type="button" onClick={() => scrollToId('about')} className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 rounded">About</button>
-            <button type="button" onClick={() => scrollToId('works')} className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 rounded">Works</button>
-            <button type="button" onClick={() => scrollToId('contact')} className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30 rounded">Contact</button>
+        <div
+          className="
+            h-[var(--nav-h)]
+            bg-black/70
+            supports-[backdrop-filter]:bg-black/60
+            backdrop-blur-sm
+            border-b border-white/10
+          "
+        >
+          <div className="flex h-full items-center justify-end gap-3 sm:gap-4 px-3 sm:px-6">
+            <Link
+              to="/about"
+              className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 rounded"
+            >
+              {t("nav_about")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => scrollToId("works")}
+              className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 rounded"
+            >
+              {t("nav_works")}
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToId("contact")}
+              className="px-2 py-1 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 rounded"
+            >
+              {t("nav_contact")}
+            </button>
+
+            {/* 언어 토글 */}
+            <button
+              type="button"
+              onClick={() => setLang(lang === "ko" ? "en" : "ko")}
+              className="ml-2 rounded border border-white/20 px-2 py-1 text-xs text-white/80 hover:bg-white/10"
+              aria-label="Toggle language"
+              title="Toggle language"
+            >
+              {lang.toUpperCase()}
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* INTRO section (full viewport): only videos, no text) */}
+      {/* INTRO (page 1) */}
       <section className="relative min-h-[100svh]">
-        {/* Background (no video on page 1 as requested) */}
         <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-          {/* Intro page background intentionally left black */}
           {showVignette && (
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/70" />
           )}
         </div>
 
-        {/* Foreground LOGO (centered, moved slightly up) */}
-        {isLogoOverlayEnabled(logoWebmAlphaSrc) && (
+        {/* foreground logo (optional) */}
+        {Boolean(logoWebmAlphaSrc) && (
           <div
             className="pointer-events-none absolute inset-0 z-10 grid place-items-center"
             style={{ transform: `translateY(${logoOffsetYPct}%)` }}
@@ -244,7 +321,7 @@ export default function HeroScroll({
               muted
               playsInline
               preload="metadata"
-              style={{ opacity: clamp01(logoOpacity) }}
+              style={{ opacity: Math.min(1, Math.max(0, logoOpacity)) }}
             >
               {assetChain("logo.webm").map((u) => (
                 <source key={u} src={u} type={mimeFrom(u)} onError={() => markError(u)} />
@@ -257,9 +334,8 @@ export default function HeroScroll({
         )}
       </section>
 
-      {/* Sticky HERO section (now starts one page later) */}
-      <section id="about" ref={heroRef} className="relative min-h-[140svh]">
-        {/* Background video */}
+      {/* HERO (page 2) */}
+      <section id="hero" ref={heroRef} className="relative min-h-[140svh]">
         <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
           <video
             className="h-full w-full object-cover"
@@ -269,7 +345,7 @@ export default function HeroScroll({
             muted
             playsInline
             preload="metadata"
-            style={{ opacity: clamp01(heroBgOpacity ?? bgOpacity) }}
+            style={{ opacity: Math.min(1, Math.max(0, heroBgOpacity ?? bgOpacity)) }}
           />
           {showVignette && (
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/70" />
@@ -277,51 +353,59 @@ export default function HeroScroll({
         </div>
 
         <div className="sticky top-0 flex h-[100svh] items-center px-6 sm:px-10">
-          <div className="mx-auto max-w-6xl">
-            <motion.h1
-              initial={reduced ? undefined : { opacity: 0, y: 24 }}
-              animate={reduced ? undefined : { opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-              style={{ y: reduced ? 0 : h1Y, opacity: reduced ? 1 : h1Opacity, scale: reduced ? 1 : h1Scale }}
-              className="text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl md:text-7xl"
-            >
-              Hwang Su Jong — Portfolio
-              <span className="block text-neutral-300">Interfacing Reality, Playfully.</span>
-            </motion.h1>
+          {/* === REPLACE FROM HERE (HERO text block) === */}
+          <div className="w-full">
+            {/* 좌측 여백 래퍼 */}
+            <div className="pl-[10vw] sm:pl-[12vw] md:pl-[14vw] lg:pl-[16vw] xl:pl-[18vw] max-w-[1600px]">
+              {/* 메인 + 서브 (같은 크기/색) */}
+              <motion.div
+                initial={reduced ? undefined : { opacity: 0, y: 24 }}
+                animate={reduced ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                style={{ y: reduced ? 0 : h1Y, opacity: reduced ? 1 : h1Opacity, scale: reduced ? 1 : h1Scale }}
+                className="text-left"
+              >
+                <h1 className="text-balance text-4xl sm:text-6xl md:text-7xl font-semibold leading-tight tracking-tight">
+                  Hwang Su Jong
+                </h1>
+                <h2 className="mt-1 text-4xl sm:text-6xl md:text-7xl font-semibold leading-tight tracking-tight">
+                  Interfacing Reality, Playfully.
+                </h2>
+              </motion.div>
 
-            <motion.p
-              initial={reduced ? undefined : { opacity: 0, y: 16 }}
-              animate={reduced ? undefined : { opacity: 1, y: 0 }}
-              transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-              style={{ y: reduced ? 0 : pY, opacity: reduced ? 1 : pOpacity }}
-              className="mt-6 max-w-3xl text-pretty text-[1.4rem] leading-relaxed text-neutral-200"
-            >
-              디지털과 현실 사이의 틈을 열어, 플레이할 수 있는 현실을 만듭니다.
-            </motion.p>
+              {/* 제2 서브텍스트 */}
+              <motion.p
+                initial={reduced ? undefined : { opacity: 0, y: 16 }}
+                animate={reduced ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                style={{ y: reduced ? 0 : pY, opacity: reduced ? 1 : pOpacity }}
+                className="mt-10 max-w-3xl text-pretty text-[1.125rem] sm:text-[1.25rem] leading-relaxed text-neutral-200"
+              >
+                {t("hero_subtitle")}
+              </motion.p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ABOUT image (3rd section): fill the page */}
-      <section id="about-image" ref={aboutImageRef} className="relative min-h-[100svh] bg-black">
-        <AspectAwareAbout
-          y={aboutY}
-          opacity={aboutOpacity}
-          scale={aboutScale}
-          src={asset("about.png")}
-        />
-      </section>
-
-
-      {/* Works Archive Grid (4th) */}
+      {/* Works (page 3) */}
       <section id="works" className="relative min-h-[100svh] bg-black">
-        {/* Tag selector row — “play a ____” concept */}
-        <div className="sticky top-[44px] z-30 bg-black/50 backdrop-blur supports-[backdrop-filter]:bg-black/50">
-          <div className="mx-auto max-w-none px-3 py-3 sm:px-6 lg:px-10">
+        {/* sticky filter bar */}
+        <div
+          className="
+            sticky
+            top-[var(--nav-h)]
+            z-30
+            bg-black/70
+            supports-[backdrop-filter]:bg-black/60
+            backdrop-blur-sm
+            border-b border-white/10
+          "
+        >
+          <div className="mx-auto max-w-none px-2 py-3 sm:px-6 lg:px-10">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              {/* Left: play a ____ headline */}
               <div className="text-2xl font-semibold leading-none tracking-tight sm:text-3xl" aria-live="polite">
-                <span className="text-white/70">play a</span>
+                <span className="text-white/70">{t("works_play_a")}</span>
                 <motion.span
                   key={activeTag}
                   initial={{ y: "100%", opacity: 0 }}
@@ -333,7 +417,6 @@ export default function HeroScroll({
                 </motion.span>
               </div>
 
-              {/* Right: tag chips */}
               <div className="-mx-1 flex flex-wrap items-center gap-2">
                 {allTags.filter((t) => t !== "All").map((tag) => (
                   <button
@@ -351,46 +434,101 @@ export default function HeroScroll({
                     {TAG_LABEL[tag as Tag] ?? tag}
                   </button>
                 ))}
-                {/* Reset to All */}
                 <button
                   type="button"
                   onClick={() => setActiveTag("All")}
                   className="ml-1 px-3 py-1.5 text-xs sm:text-sm rounded-full border border-white/10 text-white/60 hover:text-white/90 hover:border-white/30"
                   title="Show all"
                 >
-                  reset
+                  {t("works_reset")}
                 </button>
               </div>
             </div>
           </div>
         </div>
 
+  {/* 이하 그리드 그대로… */}
+
+
         {/* Grid */}
-        <div className="mx-auto max-w-none px-2 sm:px-4 lg:px-8 py-8">
-          <h2 className="mb-6 text-lg font-medium text-white/90">Archive</h2>
+        <div className="mx-auto max-w-none px-4 sm:px-6 lg:px-10 py-8">
           <motion.ul
             layout
-            className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-2 lg:gap-6"
+            className="grid grid-cols-2 gap-3.5 sm:gap-4.5 lg:gap-6.5"
             initial={false}
           >
             {filteredWorks.map((w) => (
-              <motion.li key={w.id} layout className="group overflow-hidden rounded-lg border border-white/10 bg-white/5">
+              <motion.li
+                key={w.id}
+                layout
+                className="relative overflow-hidden rounded-xl border border-white/10 bg-white/5"
+              >
                 <Link
                   to={`/work/${encodeURIComponent(w.slug)}`}
-                  className="block"
+                  className="group block relative"
                   aria-label={`Open ${w.title}`}
                 >
-                  <div className="aspect-[4/3] overflow-hidden bg-white/5">
-                    <SmartImg
-                      sources={w.thumb.startsWith("/") ? [w.thumb] : assetChain(w.thumb.replace(/^.*media\//, '').replace(/^\//, ''))}
-                      alt={w.title}
-                      className="h-full w-full object-cover"
-                    />
+                  {/* 비주얼 박스 */}
+                  <div className="aspect-[4/3] relative overflow-hidden rounded-[inherit]">
+                    {/* 확대되는 공통 래퍼: 썸네일/프리뷰/오버레이가 함께 확대 */}
+                    <div className="absolute inset-0 will-change-transform transition-transform duration-300 group-hover:scale-[1.02] [transform-origin:center] rounded-[inherit]">
+                      {/* 썸네일(기본) */}
+                      <SmartImg
+                        sources={
+                          w.thumb.startsWith("/")
+                            ? [w.thumb]
+                            : assetChain(w.thumb.replace(/^.*media\//, "").replace(/^\//, ""))
+                        }
+                        alt={w.title}
+                        className="absolute inset-0 h-full w-full object-cover rounded-[inherit] z-[1]"
+                      />
+
+                      {/* 호버 프리뷰 (webm) */}
+                      {w.preview && (
+                        <video
+                          className="absolute inset-0 h-full w-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-[inherit] z-[1]"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          preload="metadata"
+                        >
+                          <source
+                            src={
+                              w.preview.startsWith("/")
+                                ? w.preview
+                                : assetChain(w.preview.replace(/^.*media\//, "").replace(/^\//, ""))[0]
+                            }
+                            type="video/webm"
+                          />
+                        </video>
+                      )}
+
+                      {/* 1) 균일 딤(전체 어둡게) */}
+                      <div
+                        className="pointer-events-none absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-[inherit] z-[2]"
+                        aria-hidden
+                      />
+
+                      {/* 2) 하단 그라데이션(가독성 보강) */}
+                      <div
+                        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-[inherit] z-[3]"
+                        aria-hidden
+                      />
+
+                      {/* 텍스트 오버레이 */}
+                      <div className="absolute left-0 right-0 bottom-0 p-4 sm:p-6 md:p-7 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[4]">
+                        <p className="truncate text-lg sm:text-xl md:text-2xl font-semibold text-white leading-tight drop-shadow">
+                          {w.title}
+                        </p>
+                        <p className="truncate mt-1.5 text-sm sm:text-base md:text-lg text-white/90">
+                          {w.subtitle ?? w.tags[0]}
+                        </p>
+                        <div className="h-1.5 sm:h-2" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm">
-                    <span className="truncate text-white/90">{w.title}</span>
-                    <span className="truncate text-white/40">{w.tags[0]}</span>
-                  </div>
+
                 </Link>
               </motion.li>
             ))}
@@ -400,43 +538,31 @@ export default function HeroScroll({
             <p className="mt-10 text-center text-white/50">No works for the selected tag.</p>
           )}
         </div>
+
       </section>
 
-      {/* Contact (5th) — 폼 + 메일to 백업 */}
-        <section
-          id="contact"
-          className="relative bg-black"
-          aria-labelledby="contact-heading"
-        >
-          <div className="mx-auto max-w-6xl px-6 sm:px-10 py-14 sm:py-16">
-            <h2
-              id="contact-heading"
-              className="text-2xl sm:text-3xl font-bold tracking-tight"
+      {/* Contact (page 4) */}
+      <section id="contact" className="relative bg-black" aria-labelledby="contact-heading">
+        <div className="mx-auto max-w-6xl px-6 sm:px-10 py-14 sm:py-16">
+          <h2 id="contact-heading" className="text-2xl sm:text-3xl font-bold tracking-tight">{t("contact_title")}</h2>
+          <p className="mt-2 text-neutral-300 max-w-2xl">
+            {t("contact_hint")}
+          </p>
+          <ContactForm />
+        </div>
+
+        <div className="border-t border-white/10">
+          <div className="mx-auto max-w-6xl px-6 sm:px-10 py-8 text-sm text-neutral-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <p>© {new Date().getFullYear()} Hwang Su Jong</p>
+            <a
+              className="rounded underline-offset-4 hover:text-neutral-300 hover:underline focus:outline-none focus:ring-2 focus:ring-white/30"
+              href="mailto:hsail5483@gmail.com"
             >
-              Contact
-            </h2>
-            <p className="mt-2 text-neutral-300 max-w-2xl">
-              제출 즉시 메일 초안이 열리며, 필요 시 내용을 수정한 뒤 전송하시면 됩니다.
-            </p>
-
-            {/* 폼: 기본은 메일to, 필요하면 Formspree/EmailJS로 바꾸기 쉬움 */}
-            <ContactForm />
+              hsail5483@gmail.com
+            </a>
           </div>
-
-          {/* 작은 푸터 */}
-          <div className="border-t border-white/10">
-            <div className="mx-auto max-w-6xl px-6 sm:px-10 py-8 text-sm text-neutral-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <p>© {new Date().getFullYear()} Hwang Su Jong</p>
-              <a
-                className="rounded underline-offset-4 hover:text-neutral-300 hover:underline focus:outline-none focus:ring-2 focus:ring-white/30"
-                href="mailto:hsail5483@gmail.com"
-              >
-                hsail5483@gmail.com
-              </a>
-            </div>
-          </div>
-        </section>
-
+        </div>
+      </section>
 
       {/* Debug panel */}
       {debug && assetErrors.length > 0 && (
@@ -454,68 +580,73 @@ export default function HeroScroll({
   );
 }
 
-/**
- * ---------- Utilities & tests ----------
- * Keep runtime clean; tests run only under Vitest.
- */
-export function clamp01(v: number) {
-  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
-}
-
-export function formatBlur(px: number) {
-  const v = Number.isFinite(px) ? Math.max(0, px) : 0;
-  return `blur(${v}px)`;
-}
-
+/* ---- helpers & tests (기존 그대로) ---- */
+export function clamp01(v: number) { return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0; }
+export function formatBlur(px: number) { const v = Number.isFinite(px) ? Math.max(0, px) : 0; return `blur(${v}px)`; }
 export function mapRangeClamped(x: number, inMin: number, inMax: number, outMin: number, outMax: number) {
   if (!Number.isFinite(x) || !Number.isFinite(inMin) || !Number.isFinite(inMax) || inMin === inMax) return outMin;
   const t = Math.min(1, Math.max(0, (x - inMin) / (inMax - inMin)));
   return outMin + (outMax - outMin) * t;
 }
+export function isLogoOverlayEnabled(src?: string) { return Boolean(src && typeof src === "string" && src.length > 0); }
+export function shouldUseBlend(logoWebmAlphaSrc?: string) { return !isLogoOverlayEnabled(logoWebmAlphaSrc); }
+export function uniqueTags(items: { tags: string[] }[]) { const s = new Set<string>(); for (const it of items) for (const t of it.tags) s.add(t); return Array.from(s); }
+export function filterByTag<T extends { tags: string[] }>(items: T[], tag: string): T[] { if (!tag || tag === "All") return items; return items.filter((it) => it.tags.includes(tag)); }
 
-export function isLogoOverlayEnabled(src?: string) {
-  return Boolean(src && typeof src === 'string' && src.length > 0);
-}
-
-export function shouldUseBlend(logoWebmAlphaSrc?: string) {
-  return !isLogoOverlayEnabled(logoWebmAlphaSrc);
-}
-
-// Works helpers
-export function uniqueTags(items: { tags: string[] }[]): string[] {
-  const s = new Set<string>();
-  for (const it of items) for (const t of it.tags) s.add(t);
-  return Array.from(s);
-}
-
-export function filterByTag<T extends { tags: string[] }>(items: T[], tag: string): T[] {
-  if (!tag || tag === 'All') return items;
-  return items.filter((it) => it.tags.includes(tag));
-}
-
+/* ContactForm: i18n 적용된 버전 */
 function ContactForm() {
+  const { t } = useI18n();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  // 스팸 방지용 허니팟
-  const [website, setWebsite] = useState("");
+  const [website, setWebsite] = useState(""); // 허니팟
 
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // .env 의 VITE_FORMSPREE_ID
+  const formId = (import.meta as any).env?.VITE_FORMSPREE_ID as string | undefined;
+  const endpoint = formId ? `https://formspree.io/${formId}` : "";
+
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
+    if (status === "sending") return;
     if (website) return; // 봇 의심시 무시
 
-    const subject = encodeURIComponent(`[Inquiry] ${name || "New project"}`);
-    const body = encodeURIComponent(
-      [
-        `Name: ${name}`,
-        `Email: ${email}`,
-        ``,
-        `Message:`,
-        message,
-      ].join("\n")
-    );
+    if (!endpoint) {
+      setStatus("error");
+      setErrorMsg("Form endpoint가 설정되지 않았습니다. .env의 VITE_FORMSPREE_ID를 확인하세요.");
+      return;
+    }
 
-    window.location.href = `mailto:su96hwang@gmail.com?subject=${subject}&body=${body}`;
+    setStatus("sending");
+    setErrorMsg("");
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, message }),
+      });
+
+      if (res.ok) {
+        setStatus("ok");
+        setName("");
+        setEmail("");
+        setMessage("");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setStatus("error");
+        setErrorMsg(data?.errors?.[0]?.message || `전송에 실패했습니다. (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setStatus("error");
+      setErrorMsg(err?.message || "네트워크 오류가 발생했습니다.");
+    }
   };
 
   const inputCls =
@@ -526,25 +657,21 @@ function ContactForm() {
       onSubmit={onSubmit}
       className="mt-6 grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-white/5 p-5"
       aria-labelledby="contact-form"
+      noValidate
     >
       <h3 id="contact-form" className="sr-only">Contact form</h3>
 
       {/* 허니팟(숨김) */}
       <label className="hidden">
         Website
-        <input
-          tabIndex={-1}
-          autoComplete="off"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-        />
+        <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
       </label>
 
       <label>
-        <div className="mb-1 text-xs text-white/60">Name</div>
+        <div className="mb-1 text-xs text-white/60">{t("contact_name")}</div>
         <input
           className={inputCls}
-          placeholder="Your name"
+          placeholder={t("contact_placeholder_name")}
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -552,11 +679,11 @@ function ContactForm() {
       </label>
 
       <label>
-        <div className="mb-1 text-xs text-white/60">Email</div>
+        <div className="mb-1 text-xs text-white/60">{t("contact_email")}</div>
         <input
           type="email"
           className={inputCls}
-          placeholder="you@domain.com"
+          placeholder={t("contact_placeholder_email")}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -564,149 +691,33 @@ function ContactForm() {
       </label>
 
       <label>
-        <div className="mb-1 text-xs text-white/60">Message</div>
+        <div className="mb-1 text-xs text-white/60">{t("contact_message")}</div>
         <textarea
           className={inputCls + " min-h-[140px]"}
-          placeholder="Project summary, goals, references…"
+          placeholder={t("contact_placeholder_message")}
           required
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
       </label>
 
+      {/* 상태 메시지 */}
+      <div aria-live="polite" className="text-sm">
+        {status === "sending" && <p className="text-white/70">{t("contact_sending")}</p>}
+        {status === "ok" && <p className="text-emerald-400">{t("contact_ok")}</p>}
+        {status === "error" && <p className="text-red-400">{t("contact_error_prefix")} {errorMsg}</p>}
+      </div>
+
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-white/60">
-          제출 시 메일 클라이언트가 열립니다. (정보는 답변 목적에만 사용)
-        </p>
+        <p className="text-xs text-white/60">{t("contact_privacy")}</p>
         <button
-          className="rounded-xl bg-white text-black hover:bg-white/90 px-4 py-2.5 font-medium"
+          className="rounded-xl bg-white text-black hover:bg-white/90 px-4 py-2.5 font-medium disabled:opacity-60"
           type="submit"
+          disabled={status === "sending"}
         >
-          Send
+          {status === "sending" ? t("contact_sending") : t("contact_send")}
         </button>
       </div>
     </form>
   );
 }
-
-
-
-// @vitest-environment jsdom
-void (async () => {
-  // Guard for non-test environments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta: any = import.meta as any;
-  if (!meta || !meta.vitest) return;
-
-  // Existing tests — fixed a clear typo .ToBe -> .toBe
-  // @ts-ignore
-  test("formatBlur clamps negatives to 0", () => {
-    // @ts-ignore
-    expect(formatBlur(-3)).toBe("blur(0px)");
-  });
-  // @ts-ignore
-  test("formatBlur formats integer px", () => {
-    // @ts-ignore
-    expect(formatBlur(5)).toBe("blur(5px)");
-  });
-  // @ts-ignore
-  test("formatBlur handles NaN as 0", () => {
-    // @ts-ignore
-    expect(formatBlur(Number.NaN)).toBe("blur(0px)");
-  });
-
-  // @ts-ignore
-  test("formatBlur keeps float precision", () => {
-    // @ts-ignore
-    expect(formatBlur(2.5)).toBe("blur(2.5px)");
-  });
-  // @ts-ignore
-  test("formatBlur clamps Infinity to 0", () => {
-    // @ts-ignore
-    expect(formatBlur(Number.POSITIVE_INFINITY)).toBe("blur(0px)");
-  });
-
-  // @ts-ignore
-  test("mapRangeClamped maps center to center", () => {
-    // @ts-ignore
-    expect(mapRangeClamped(0.5, 0, 1, 10, 20)).toBe(15);
-  });
-  // @ts-ignore
-  test("mapRangeClamped clamps below", () => {
-    // @ts-ignore
-    expect(mapRangeClamped(-1, 0, 1, 10, 20)).toBe(10);
-  });
-  // @ts-ignore
-  test("mapRangeClamped clamps above", () => {
-    // @ts-ignore
-    expect(mapRangeClamped(2, 0, 1, 10, 20)).toBe(20);
-  });
-  // @ts-ignore
-  test("mapRangeClamped handles bad input range", () => {
-    // @ts-ignore
-    expect(mapRangeClamped(0.5, 1, 1, 10, 20)).toBe(10);
-  });
-
-  // New tests for logo overlay enable check
-  // @ts-ignore
-  test("isLogoOverlayEnabled returns true for non-empty string", () => {
-    // @ts-ignore
-    expect(isLogoOverlayEnabled("/media/logo.mp4")).toBe(true);
-  });
-  // @ts-ignore
-  test("isLogoOverlayEnabled returns false for empty or undefined", () => {
-    // @ts-ignore
-    expect(isLogoOverlayEnabled("")).toBe(false);
-    // @ts-ignore
-    expect(isLogoOverlayEnabled(undefined)).toBe(false);
-  });
-
-  // New tests for shouldUseBlend
-  // @ts-ignore
-  test("shouldUseBlend is false when webm alpha provided", () => {
-    // @ts-ignore
-    expect(shouldUseBlend("/media/logo_alpha.webm")).toBe(false);
-  });
-  // @ts-ignore
-  test("shouldUseBlend is true when webm alpha missing", () => {
-    // @ts-ignore
-    expect(shouldUseBlend(undefined)).toBe(true);
-  });
-
-  // New tests for uniqueTags / filterByTag
-  // @ts-ignore
-  test("uniqueTags returns distinct tags", () => {
-    // @ts-ignore
-    expect(uniqueTags([{ tags: ["a", "b"] }, { tags: ["b", "c"] }]).sort()).toEqual(["a", "b", "c"]);
-  });
-  // @ts-ignore
-  test("filterByTag returns all for 'All'", () => {
-    // @ts-ignore
-    const items = [{ tags: ["x"] }, { tags: ["y"] }];
-    // @ts-ignore
-    expect(filterByTag(items, "All").length).toBe(2);
-  });
-  // @ts-ignore
-  test("filterByTag filters by exact tag", () => {
-    // @ts-ignore
-    const items = [{ tags: ["x"] }, { tags: ["y", "x"] }, { tags: ["z"] }];
-    // @ts-ignore
-    expect(filterByTag(items, "x").length).toBe(2);
-  });
-
-  // New tests for asset() helper
-  // @ts-ignore
-  test("asset returns /media/... by default", () => {
-    // @ts-ignore
-    expect(asset("x.jpg")).toBe("/media/x.jpg");
-  });
-  // @ts-ignore
-  test("asset respects <base href>", () => {
-    const base = document.createElement('base');
-    base.setAttribute('href', '/app/');
-    document.head.append(base);
-    // @ts-ignore
-    expect(asset("y.png")).toBe("/app/media/y.png");
-    base.remove();
-  });
-})();
